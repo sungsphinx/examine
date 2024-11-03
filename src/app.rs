@@ -384,7 +384,7 @@ impl Application for AppModel {
                             .lines()
                             .map(|line: &str| {
                                 let (prefix, suffix) = line.split_once(':').unwrap();
-                                settings::item(prefix, widget::text::body(suffix)).into()
+                                settings::item(prefix.trim(), widget::text::body(suffix)).into()
                             })
                             .collect::<Vec<Element<Message>>>();
 
