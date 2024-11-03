@@ -23,7 +23,7 @@ pub struct AppModel {
     nav: nav_bar::Model,
     key_binds: HashMap<menu::KeyBind, MenuAction>,
     config: Config,
-    dmidecode: Option<String>,
+    hostnamectl: Option<String>,
     lscpu: Option<String>,
     lspci: Option<String>,
     lsusb: Option<String>,
@@ -95,18 +95,18 @@ impl Application for AppModel {
                     Err((_errors, config)) => config,
                 })
                 .unwrap_or_default(),
-            dmidecode: None,
+            hostnamectl: None,
             lscpu: None,
             lspci: None,
             lsusb: None,
         };
 
-        let dmidecode_cmd = std::process::Command::new("dmidecode -t baseboard").output();
-        if dmidecode_cmd.is_ok() {
-            app.dmidecode = Some(String::from_utf8(dmidecode_cmd.unwrap().stdout).unwrap());
-        } else if let Err(e) = dmidecode_cmd {
-            app.dmidecode = Some(fl!("error-occurred-with-msg", error = e.to_string()));
-            error!("dmidecode command failed: {}", e);
+        let hostnamectl_cmd = std::process::Command::new("hostnamectl").output();
+        if hostnamectl_cmd.is_ok() {
+            app.hostnamectl = Some(String::from_utf8(hostnamectl_cmd.unwrap().stdout).unwrap());
+        } else if let Err(e) = hostnamectl_cmd {
+            app.hostnamectl = Some(fl!("error-occurred-with-msg", error = e.to_string()));
+            error!("hostnamectl command failed: {}", e);
         }
 
         let lscpu_cmd = std::process::Command::new("lscpu").output();
@@ -372,15 +372,15 @@ impl Application for AppModel {
                     .into()
             }
             Some(Page::Motherboard) => {
-                let Some(dmidecode) = &self.dmidecode else {
+                let Some(hostnamectl) = &self.hostnamectl else {
                     return widget::text::title1(fl!("error-occurred")).into();
                 };
 
-                if let Some(dmidecode_str) = &self.dmidecode {
-                    if dmidecode_str.starts_with(fl!("error-occurred").as_str()) {
-                        return widget::text::title1(dmidecode_str).into();
+                if let Some(hostnamectl_str) = &self.hostnamectl {
+                    if hostnamectl_str.starts_with(fl!("error-occurred").as_str()) {
+                        return widget::text::title1(hostnamectl_str).into();
                     } else {
-                        let dmidecode = dmidecode
+                        let hostnamectl = hostnamectl
                             .lines()
                             .map(|line: &str| {
                                 let (prefix, suffix) = line.split_once(':').unwrap();
@@ -389,7 +389,7 @@ impl Application for AppModel {
                             .collect::<Vec<Element<Message>>>();
 
                         let mut section = list_column();
-                        for item in dmidecode {
+                        for item in hostnamectl {
                             section = section.add(item);
                         }
                         return section.apply(widget::scrollable).into()
