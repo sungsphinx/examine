@@ -2,10 +2,9 @@
 
 use crate::config::Config;
 use crate::fl;
-use cosmic::app::{Command, Core};
+use cosmic::app::{Core, Task};
 use cosmic::cosmic_config::{self, CosmicConfigEntry};
-use cosmic::iced::{Alignment, Length, Subscription};
-use cosmic::iced_winit::winit::window::WindowId;
+use cosmic::iced::{stream, Subscription, alignment, Alignment, Length};
 use cosmic::widget::{self, icon, list_column, menu, nav_bar, row, settings};
 use cosmic::{cosmic_theme, theme, Application, ApplicationExt, Apply, Element};
 use etc_os_release::OsRelease;
@@ -55,7 +54,7 @@ impl Application for AppModel {
         &mut self.core
     }
 
-    fn init(core: Core, _flags: Self::Flags) -> (Self, Command<Self::Message>) {
+    fn init(core: Core, _flags: Self::Flags) -> (Self, Task<Self::Message>) {
         let mut nav = nav_bar::Model::default();
 
         nav.insert()
@@ -256,7 +255,7 @@ impl Application for AppModel {
                         row::with_capacity(2)
                             .push(icon::from_name(logo.to_string()))
                             .push(widget::text::body(logo.to_string()))
-                            .align_items(Alignment::Center)
+                            .align_y(Alignment::Center)
                             .spacing(spacing.space_xxxs),
                     ));
                 }
@@ -269,37 +268,37 @@ impl Application for AppModel {
                 if let Ok(Some(home_url)) = osrelease.home_url() {
                     list = list.add(settings::item(
                         fl!("home-url"),
-                        widget::text::body(home_url.to_string()),
+                        widget::button::link(home_url.to_string()).on_press(Message::LaunchUrl(home_url.to_string())),
                     ));
                 }
                 if let Ok(Some(support_url)) = osrelease.support_url() {
                     list = list.add(settings::item(
                         fl!("vendor-url"),
-                        widget::text::body(support_url.to_string()),
+                        widget::button::link(support_url.to_string()).on_press(Message::LaunchUrl(support_url.to_string())),
                     ));
                 }
                 if let Ok(Some(documentation_url)) = osrelease.documentation_url() {
                     list = list.add(settings::item(
                         fl!("doc-url"),
-                        widget::text::body(documentation_url.to_string()),
+                        widget::button::link(documentation_url.to_string()).on_press(Message::LaunchUrl(documentation_url.to_string())),
                     ));
                 }
                 if let Ok(Some(support_url)) = osrelease.support_url() {
                     list = list.add(settings::item(
                         fl!("support-url"),
-                        widget::text::body(support_url.to_string()),
+                        widget::button::link(support_url.to_string()).on_press(Message::LaunchUrl(support_url.to_string())),
                     ));
                 }
                 if let Ok(Some(bug_report_url)) = osrelease.bug_report_url() {
                     list = list.add(settings::item(
                         fl!("bug-report-url"),
-                        widget::text::body(bug_report_url.to_string()),
+                        widget::button::link(bug_report_url.to_string()).on_press(Message::LaunchUrl(bug_report_url.to_string())),
                     ));
                 }
                 if let Ok(Some(privacy_policy_url)) = osrelease.privacy_policy_url() {
                     list = list.add(settings::item(
                         fl!("privacy-policy-url"),
-                        widget::text::body(privacy_policy_url.to_string()),
+                        widget::button::link(privacy_policy_url.to_string()).on_press(Message::LaunchUrl(privacy_policy_url.to_string())),
                     ));
                 }
                 if let Some(support_end) = osrelease.support_end().unwrap_or_default().take() {
@@ -493,14 +492,13 @@ impl Application for AppModel {
         struct MySubscription;
 
         Subscription::batch(vec![
-            cosmic::iced::subscription::channel(
+            Subscription::run_with_id(
                 std::any::TypeId::of::<MySubscription>(),
-                4,
-                move |mut channel| async move {
+                stream::channel(4, move |mut channel| async move {
                     _ = channel.send(Message::SubscriptionChannel).await;
 
                     futures_util::future::pending().await
-                },
+                }),
             ),
             self.core()
                 .watch_config::<Config>(Self::APP_ID)
@@ -508,7 +506,7 @@ impl Application for AppModel {
         ])
     }
 
-    fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
+    fn update(&mut self, message: Self::Message) -> Task<Self::Message> {
         match message {
             Message::LaunchUrl(url) => match open::that_detached(&url) {
                 Ok(()) => {}
@@ -536,10 +534,10 @@ impl Application for AppModel {
                 self.config = config;
             }
         }
-        Command::none()
+        Task::none()
     }
 
-    fn on_nav_select(&mut self, id: nav_bar::Id) -> Command<Self::Message> {
+    fn on_nav_select(&mut self, id: nav_bar::Id) -> Task<Self::Message> {
         self.nav.activate(id);
         self.update_title()
     }
@@ -572,13 +570,13 @@ impl AppModel {
             .push(title)
             .push(repo)
             .push(commit)
-            .align_items(Alignment::Center)
+            .align_x(alignment::Horizontal::Center)
             .spacing(space_xxs)
             .into()
     }
 
     /// Updates the header and window titles.
-    pub fn update_title(&mut self) -> Command<Message> {
+    pub fn update_title(&mut self) -> Task<Message> {
         let mut window_title = fl!("app-title");
 
         if let Some(page) = self.nav.text(self.nav.active()) {
