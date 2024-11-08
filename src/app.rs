@@ -2,11 +2,11 @@
 
 use crate::config::Config;
 use crate::fl;
-use cosmic::app::{Core, Task};
+use cosmic::app::{Core, Task, about::About};
 use cosmic::cosmic_config::{self, CosmicConfigEntry};
-use cosmic::iced::{stream, Subscription, alignment, Alignment, Length};
+use cosmic::iced::{stream, Subscription, Alignment, Length};
 use cosmic::widget::{self, icon, list_column, menu, nav_bar, row, settings};
-use cosmic::{cosmic_theme, theme, Application, ApplicationExt, Apply, Element};
+use cosmic::{theme, Application, ApplicationExt, Apply, Element};
 use etc_os_release::OsRelease;
 use futures_util::SinkExt;
 use itertools::Itertools;
@@ -14,11 +14,10 @@ use std::{collections::HashMap, fs, path::PathBuf, str::FromStr};
 use log::{error, warn};
 
 const REPOSITORY: &str = "https://github.com/cosmic-utils/examine";
-const APP_ICON: &[u8] =
-    include_bytes!("../res/icons/hicolor/scalable/apps/io.github.cosmic_utils.Examine.svg");
 
 pub struct AppModel {
     core: Core,
+    about: About,
     context_page: ContextPage,
     nav: nav_bar::Model,
     key_binds: HashMap<menu::KeyBind, MenuAction>,
@@ -34,6 +33,7 @@ pub enum Message {
     SubscriptionChannel,
     ToggleContextPage(ContextPage),
     UpdateConfig(Config),
+    Cosmic(cosmic::app::cosmic::Message),
 }
 
 impl Application for AppModel {
@@ -55,6 +55,18 @@ impl Application for AppModel {
 
     fn init(core: Core, _flags: Self::Flags) -> (Self, Task<Self::Message>) {
         let mut nav = nav_bar::Model::default();
+
+        let mut tasks = vec![];
+
+        let about = About::default()
+            .set_application_name(fl!("app-title"))
+            .set_application_icon(Self::APP_ID)
+            .set_developer_name("COSMIC Utilities")
+            .set_version(env!("CARGO_PKG_VERSION"))
+            .set_license_type("GPL-3.0")
+            .set_repository_url(REPOSITORY)
+            .set_support_url(format!("{REPOSITORY}/issues"))
+            .set_developers([("Dexter Reed".into(), "dreed4470@proton.me".into())]);
 
         nav.insert()
             .text(fl!("distribution"))
@@ -79,6 +91,7 @@ impl Application for AppModel {
 
         let mut app = AppModel {
             core,
+            about,
             context_page: ContextPage::default(),
             nav,
             key_binds: HashMap::new(),
@@ -117,9 +130,13 @@ impl Application for AppModel {
             error!("lsusb command failed: {}", e);
         }
 
-        let command = app.update_title();
+        tasks.push(app.update_title());
 
-        (app, command)
+        (app, Task::batch(tasks))
+    }
+
+    fn about(&self) -> Option<&About> {
+        Some(&self.about)
     }
 
     fn header_start(&self) -> Vec<Element<Self::Message>> {
@@ -144,7 +161,7 @@ impl Application for AppModel {
         }
 
         Some(match self.context_page {
-            ContextPage::About => self.about(),
+            ContextPage::About => self.about_view()?.map(Message::Cosmic),
         })
     }
 
@@ -464,7 +481,14 @@ impl Application for AppModel {
     }
 
     fn update(&mut self, message: Self::Message) -> Task<Self::Message> {
+        let mut tasks = vec![];
         match message {
+            Message::Cosmic(message) => {
+                tasks.push(cosmic::app::command::message(cosmic::app::message::cosmic(
+                    message,
+                )));
+            }
+
             Message::LaunchUrl(url) => match open::that_detached(&url) {
                 Ok(()) => {}
                 Err(err) => {
@@ -491,7 +515,7 @@ impl Application for AppModel {
                 self.config = config;
             }
         }
-        Task::none()
+        Task::batch(tasks)
     }
 
     fn on_nav_select(&mut self, id: nav_bar::Id) -> Task<Self::Message> {
@@ -501,37 +525,6 @@ impl Application for AppModel {
 }
 
 impl AppModel {
-    /// The about page for this app.
-    pub fn about(&self) -> Element<Message> {
-        let cosmic_theme::Spacing { space_xxs, .. } = theme::active().cosmic().spacing;
-        let icon = widget::svg(widget::svg::Handle::from_memory(APP_ICON));
-        let title = widget::text::title3(fl!("app-title"));
-        let hash = env!("VERGEN_GIT_SHA");
-        let short_hash: String = hash.chars().take(7).collect();
-        let date = env!("VERGEN_GIT_COMMIT_DATE");
-
-        let repo = widget::button::link(REPOSITORY)
-            .on_press(Message::LaunchUrl(REPOSITORY.to_string()))
-            .padding(0);
-
-        let commit = widget::button::link(fl!(
-                "git-description",
-                hash = short_hash.as_str(),
-                date = date
-            ))
-            .on_press(Message::LaunchUrl(format!("{REPOSITORY}/commits/{hash}")))
-            .padding(0);
-
-        widget::column()
-            .push(icon)
-            .push(title)
-            .push(repo)
-            .push(commit)
-            .align_x(alignment::Horizontal::Center)
-            .spacing(space_xxs)
-            .into()
-    }
-
     /// Updates the header and window titles.
     pub fn update_title(&mut self) -> Task<Message> {
         let mut window_title = fl!("app-title");
@@ -541,7 +534,11 @@ impl AppModel {
             window_title.push_str(page);
         }
 
-        self.set_window_title(window_title)
+        if let Some(window_id) = self.core.main_window_id() {
+            self.set_window_title(window_title.to_string(), window_id)
+        } else {
+            Task::none()
+        }
     }
 }
 
