@@ -1605,7 +1605,7 @@ dependencies = [
 
 [[package]]
 name = "examine"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "env_logger",
  "etc-os-release",
