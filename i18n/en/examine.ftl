@@ -13,6 +13,10 @@ wip = Work in Progress
 error-occurred = An error has occurred
 error-occurred-with-msg = An error has occurred: {$error}
 
+# About
+support = Support
+repository = Repository
+
 # Distribution Page
 pretty-name = Pretty Name
 name = Name
