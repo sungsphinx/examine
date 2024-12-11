@@ -2,10 +2,11 @@
 
 use crate::config::Config;
 use crate::fl;
-use cosmic::app::{Core, Task, about::About};
+use crate::icons;
+use cosmic::app::{Core, Task, context_drawer};
 use cosmic::cosmic_config::{self, CosmicConfigEntry};
 use cosmic::iced::{stream, Subscription, Alignment, Length};
-use cosmic::widget::{self, icon, list_column, menu, nav_bar, row, settings};
+use cosmic::widget::{self, icon, list_column, menu, nav_bar, row, settings, about::About};
 use cosmic::{theme, Application, ApplicationExt, Apply, Element};
 use etc_os_release::OsRelease;
 use futures_util::SinkExt;
@@ -32,8 +33,8 @@ pub enum Message {
     LaunchUrl(String),
     SubscriptionChannel,
     ToggleContextPage(ContextPage),
+    ToggleContextDrawer,
     UpdateConfig(Config),
-    Cosmic(cosmic::app::cosmic::Message),
 }
 
 impl Application for AppModel {
@@ -59,14 +60,33 @@ impl Application for AppModel {
         let mut tasks = vec![];
 
         let about = About::default()
-            .set_application_name(fl!("app-title"))
-            .set_application_icon(Self::APP_ID)
-            .set_developer_name("COSMIC Utilities")
-            .set_version(env!("CARGO_PKG_VERSION"))
-            .set_license_type("GPL-3.0")
-            .set_repository_url(REPOSITORY)
-            .set_support_url(format!("{REPOSITORY}/issues"))
-            .set_developers([("Dexter Reed".into(), "dreed4470@proton.me".into())]);
+            .name(fl!("app-title"))
+            .icon(Self::APP_ID)
+            .author("Dexter Reed")
+            .version(env!("CARGO_PKG_VERSION"))
+            .license("GPL-3.0-only")
+            .links([
+                (
+                    fl!("support"), format!("{REPOSITORY}/issues").as_str(),
+                ),
+                (
+                    fl!("repository"), REPOSITORY.into(),
+                ),
+            ])
+            .developers([
+                (
+                    "Dexter Reed",
+                    "dreed4470@proton.me"
+                ),
+                (
+                    "Eduardo Flores",
+                    "edfloreshz@proton.me"
+                ),
+                (
+                    "Aaron Honeycutt",
+                    "aaronhoneycutt@protonmail.com"
+                )
+            ]);
 
         nav.insert()
             .text(fl!("distribution"))
@@ -135,16 +155,12 @@ impl Application for AppModel {
         (app, Task::batch(tasks))
     }
 
-    fn about(&self) -> Option<&About> {
-        Some(&self.about)
-    }
-
     fn header_start(&self) -> Vec<Element<Self::Message>> {
         let menu_bar = menu::bar(vec![menu::Tree::with_children(
             menu::root(fl!("view")),
             menu::items(
                 &self.key_binds,
-                vec![menu::Item::Button(fl!("about"), MenuAction::About)],
+                vec![menu::Item::Button(fl!("about"), Some(icons::get_handle("info-outline-symbolic", 14)), MenuAction::About)],
             ),
         )]);
 
@@ -155,13 +171,13 @@ impl Application for AppModel {
         Some(&self.nav)
     }
 
-    fn context_drawer(&self) -> Option<Element<Self::Message>> {
+    fn context_drawer(&self) -> Option<context_drawer::ContextDrawer<Self::Message>> {
         if !self.core.window.show_context {
             return None;
         }
 
         Some(match self.context_page {
-            ContextPage::About => self.about_view()?.map(Message::Cosmic),
+            ContextPage::About => context_drawer::about(&self.about, Message::LaunchUrl, Message::ToggleContextDrawer),
         })
     }
 
@@ -481,14 +497,8 @@ impl Application for AppModel {
     }
 
     fn update(&mut self, message: Self::Message) -> Task<Self::Message> {
-        let mut tasks = vec![];
+        let tasks = vec![];
         match message {
-            Message::Cosmic(message) => {
-                tasks.push(cosmic::app::command::message(cosmic::app::message::cosmic(
-                    message,
-                )));
-            }
-
             Message::LaunchUrl(url) => match open::that_detached(&url) {
                 Ok(()) => {}
                 Err(err) => {
@@ -507,8 +517,10 @@ impl Application for AppModel {
                     self.context_page = context_page;
                     self.core.window.show_context = true;
                 }
+            }
 
-                self.set_context_title(context_page.title());
+            Message::ToggleContextDrawer => {
+                self.core.window.show_context = !self.core.window.show_context;
             }
 
             Message::UpdateConfig(config) => {
@@ -534,11 +546,7 @@ impl AppModel {
             window_title.push_str(page);
         }
 
-        if let Some(window_id) = self.core.main_window_id() {
-            self.set_window_title(window_title.to_string(), window_id)
-        } else {
-            Task::none()
-        }
+        self.set_window_title(window_title.to_string())
     }
 }
 
@@ -555,14 +563,6 @@ pub enum Page {
 pub enum ContextPage {
     #[default]
     About,
-}
-
-impl ContextPage {
-    fn title(&self) -> String {
-        match self {
-            Self::About => fl!("about"),
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
